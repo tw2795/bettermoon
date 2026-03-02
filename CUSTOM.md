@@ -53,4 +53,15 @@
 
 参考 [grok2api](https://github.com/chenyme/grok2api) 项目的 `reload_if_stale(interval=30)` 方案，为 `getConfig()` 增加 30 秒 TTL 机制。缓存过期时从数据库重新加载；加载失败**或数据库返回空**时，继续使用旧缓存并重置计时器，避免频繁重试，同时防止空配置回写覆盖数据库。非 Serverless 环境（Docker 等单实例部署）行为不变，`cachedConfig` 仍然永久有效。
 
-**注意**: `SERVER_TYPE=serverless` 需要在部署平台的环境变量中手动设置（Vercel 已在 `vercel.json` 中预设）。其他 Serverless 平台（如 Netlify、Cloudflare 等）如需此行为，也应设置该环境变量。
+**注意**: `SERVER_TYPE=serverless` 需要在部署平台的环境变量中手动设置（Vercel 已在 `vercel.json` 中预设，但可能不生效，需在 Dashboard 中手动添加）。其他 Serverless 平台（如 Netlify、Cloudflare 等）如需此行为，也应设置该环境变量。
+
+## 5. 管理面板配置读取绕过缓存（read-your-write 一致性）
+
+**文件**: `src/lib/config.ts`、`src/app/api/admin/config/route.ts`
+
+**修改内容**:
+
+1. `config.ts` 新增 `getConfigDirect()` 函数：Serverless 环境下直接从数据库读取配置并刷新内存缓存，跳过 TTL 检查；非 Serverless 环境下等同于 `getConfig()`；数据库读取失败时降级到 `getConfig()`
+2. `admin/config/route.ts` 的 GET 接口从 `getConfig()` 改为 `getConfigDirect()`
+
+**原因**: 第 4 条的 30 秒 TTL 机制解决的是多实例间的"最终一致性"，但管理面板需要"read-your-write"一致性。管理员保存配置后，前端立即调用 `refreshConfig()` 重新请求 `/api/admin/config`，该请求可能被路由到另一个 Vercel 实例，而该实例的内存缓存仍在 30 秒 TTL 内，返回旧数据。`getConfigDirect()` 确保管理面板的每次读取都直接访问数据库，同时刷新当前实例的缓存，不影响普通用户请求的缓存性能。
