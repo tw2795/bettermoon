@@ -55,6 +55,9 @@ export const API_CONFIG = {
 
 // 在模块加载时根据环境决定配置来源
 let cachedConfig: AdminConfig;
+let cachedConfigTime = 0;
+const isServerless = process.env.SERVER_TYPE === 'serverless';
+const CONFIG_CACHE_TTL_MS = 30 * 1000; // serverless 环境下配置缓存 30 秒
 
 
 // 从配置文件补充管理员配置
@@ -291,12 +294,32 @@ async function getInitConfig(configFile: string, subConfig: {
 }
 
 export async function getConfig(): Promise<AdminConfig> {
-  // 直接使用内存缓存
+  // 检查内存缓存是否可用
   if (cachedConfig) {
-    return cachedConfig;
+    // serverless 环境下，缓存超过 TTL 则从数据库重新加载
+    if (!isServerless || Date.now() - cachedConfigTime < CONFIG_CACHE_TTL_MS) {
+      return cachedConfig;
+    }
+    try {
+      const freshConfig = await db.getAdminConfig();
+      if (freshConfig) {
+        cachedConfig = configSelfCheck(freshConfig);
+        cachedConfigTime = Date.now();
+        return cachedConfig;
+      }
+      // 数据库返回空，视为异常，继续使用旧缓存
+      console.warn('数据库返回空配置，继续使用内存缓存');
+      cachedConfigTime = Date.now();
+      return cachedConfig;
+    } catch (e) {
+      console.error('刷新配置缓存失败:', e);
+      // 失败时继续使用旧缓存，重置计时避免频繁重试
+      cachedConfigTime = Date.now();
+      return cachedConfig;
+    }
   }
 
-  // 读 db
+  // 首次加载：读 db
   let adminConfig: AdminConfig | null = null;
   try {
     adminConfig = await db.getAdminConfig();
@@ -310,6 +333,7 @@ export async function getConfig(): Promise<AdminConfig> {
   }
   adminConfig = configSelfCheck(adminConfig);
   cachedConfig = adminConfig;
+  cachedConfigTime = Date.now();
   db.saveAdminConfig(cachedConfig);
   return cachedConfig;
 }
@@ -407,6 +431,7 @@ export async function resetConfig() {
   }
   const adminConfig = await getInitConfig(originConfig.ConfigFile, originConfig.ConfigSubscribtion);
   cachedConfig = adminConfig;
+  cachedConfigTime = Date.now();
   await db.saveAdminConfig(adminConfig);
 
   return;
@@ -469,4 +494,5 @@ export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
 
 export async function setCachedConfig(config: AdminConfig) {
   cachedConfig = config;
+  cachedConfigTime = Date.now();
 }

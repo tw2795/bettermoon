@@ -1,4 +1,7 @@
 {
+  "env": {
+    "SERVER_TYPE": "serverless"
+  },
   "headers": [
     {
       "source": "/fonts/inter-var-latin.woff2",
@@ -10,10 +13,18 @@
       ]
     }
   ],
+  "functions": {
+    "src/app/api/search/ws/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/cron/route.ts": {
+      "maxDuration": 60
+    }
+  },
   "crons": [
     {
       "path": "/api/cron",
-      "schedule": "0 1 * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }

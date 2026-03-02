@@ -9,6 +9,8 @@ import { yellowWords } from '@/lib/yellow';
 
 export const runtime = 'nodejs';
 
+const SEARCH_TIMEOUT_MS = process.env.SERVER_TYPE === 'serverless' ? 8000 : 20000;
+
 export async function GET(request: NextRequest) {
   const authInfo = getAuthInfoFromCookie(request);
   if (!authInfo || !authInfo.username) {
@@ -81,7 +83,7 @@ export async function GET(request: NextRequest) {
           const searchPromise = Promise.race([
             searchFromApi(site, query),
             new Promise((_, reject) =>
-              setTimeout(() => reject(new Error(`${site.name} timeout`)), 20000)
+              setTimeout(() => reject(new Error(`${site.name} timeout`)), SEARCH_TIMEOUT_MS)
             ),
           ]);
 
