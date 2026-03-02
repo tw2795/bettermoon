@@ -2,15 +2,13 @@
 
 本文件记录为适配 Vercel 部署所做的修改。
 
-## 1. vercel.json — Cron Job 频率调整
+## 1. vercel.json — Cron Job 配置
 
 **文件**: `vercel.json`
 
-**修改内容**: cron schedule 从 `0 1 * * *`（每天凌晨 1 点）改为 `0 * * * *`（每小时）
+**修改内容**: 保持原有 cron schedule `0 1 * * *`（每天凌晨 1 点），未做频率变更
 
-**原因**: 原项目在 Docker 部署时通过 `start.js` 中的 `setInterval` 每小时调用 `/api/cron`，执行配置订阅刷新、直播源刷新、播放记录/收藏更新等任务。Vercel 是 Serverless 环境，不支持 `setInterval` 持久定时器，需要改用 Vercel Cron Jobs 实现等效的定时调度。频率对齐为每小时一次以保持与原始行为一致。
-
-**注意**: Vercel Hobby（免费）套餐 cron 最小间隔为每天一次，每小时频率需要 Pro 套餐。
+**说明**: 原项目在 Docker 部署时通过 `start.js` 中的 `setInterval` 每小时调用 `/api/cron`，执行配置订阅刷新、直播源刷新、播放记录/收藏更新等任务。Vercel Hobby 套餐仅支持每天一次的 cron，无法对齐每小时频率（需 Pro 套餐）。但 cron 的作用是从外部源拉取新数据写入数据库（数据新鲜度），与跨实例内存缓存同步（由第 4 条的 30 秒 TTL 机制保证）是独立的，降低频率不影响多实例数据一致性。
 
 ## 2. vercel.json — functions maxDuration 配置
 
