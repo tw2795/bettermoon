@@ -4,18 +4,20 @@ import Hls from 'hls.js';
 
 function getDoubanImageProxyConfig(): {
   proxyType:
-  | 'direct'
-  | 'server'
-  | 'img3'
-  | 'cmliussss-cdn-tencent'
-  | 'cmliussss-cdn-ali'
-  | 'custom';
+    | 'server'
+    | 'cmliussss-cdn-tencent'
+    | 'cmliussss-cdn-ali'
+    | 'custom';
   proxyUrl: string;
 } {
-  const doubanImageProxyType =
+  let doubanImageProxyType =
     localStorage.getItem('doubanImageProxyType') ||
     (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
     'cmliussss-cdn-tencent';
+  // 兼容历史数据：直连和豆瓣官方精品 CDN 统一使用服务器代理
+  if (doubanImageProxyType === 'direct' || doubanImageProxyType === 'img3') {
+    doubanImageProxyType = 'server';
+  }
   const doubanImageProxy =
     localStorage.getItem('doubanImageProxyUrl') ||
     (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY ||
@@ -41,8 +43,6 @@ export function processImageUrl(originalUrl: string): string {
   switch (proxyType) {
     case 'server':
       return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
-    case 'img3':
-      return originalUrl.replace(/img\d+\.doubanio\.com/g, 'img3.doubanio.com');
     case 'cmliussss-cdn-tencent':
       return originalUrl.replace(
         /img\d+\.doubanio\.com/g,
@@ -55,9 +55,8 @@ export function processImageUrl(originalUrl: string): string {
       );
     case 'custom':
       return `${proxyUrl}${encodeURIComponent(originalUrl)}`;
-    case 'direct':
     default:
-      return originalUrl;
+      return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
   }
 }
 
@@ -131,14 +130,14 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
               width >= 3840
                 ? '4K' // 4K: 3840x2160
                 : width >= 2560
-                  ? '2K' // 2K: 2560x1440
-                  : width >= 1920
-                    ? '1080p' // 1080p: 1920x1080
-                    : width >= 1280
-                      ? '720p' // 720p: 1280x720
-                      : width >= 854
-                        ? '480p'
-                        : 'SD'; // 480p: 854x480
+                ? '2K' // 2K: 2560x1440
+                : width >= 1920
+                ? '1080p' // 1080p: 1920x1080
+                : width >= 1280
+                ? '720p' // 720p: 1280x720
+                : width >= 854
+                ? '480p'
+                : 'SD'; // 480p: 854x480
 
             resolve({
               quality,
@@ -211,7 +210,8 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
     });
   } catch (error) {
     throw new Error(
-      `Error getting video resolution: ${error instanceof Error ? error.message : String(error)
+      `Error getting video resolution: ${
+        error instanceof Error ? error.message : String(error)
       }`
     );
   }
